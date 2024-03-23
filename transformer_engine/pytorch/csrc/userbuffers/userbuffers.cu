@@ -52,6 +52,9 @@
 // If we expect that producer will be 2B+ messages behind consumer
 #define CHECK_IDS(producer, consumer) (((unsigned)(producer) - (unsigned)(consumer)) & (~INT_MAX))
 
+// Printf to provide enough information so it is easier to attribute failures
+#define UB_PRINT(message, ...) printf("[%s:%s:%d] " message "\n", __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
+
 template <int RANKS>
 __global__ void __launch_bounds__(MAX_THREADS)
     userbuffers_fp16_sum_inplace_gpu_rw(const int op, const int flagoffset, const int firstrank,
@@ -77,8 +80,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
-               *flag);
+        UB_PRINT("Allreduce reduce-scatter: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id, *flag);
         break;
       }
     }
@@ -131,7 +133,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allreduce Gather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -165,7 +167,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allreduce reduce-scatter:SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -214,7 +216,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allreduce gather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -276,7 +278,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -351,7 +353,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -425,7 +427,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -493,7 +495,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -528,7 +530,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -613,7 +615,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -743,7 +745,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -803,7 +805,7 @@ __global__ void __launch_bounds__(MAX_THREADS) userbuffers_fp16_sum_inplace_gpu_
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -891,7 +893,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       clock_t s = clock64();
       while (CHECK_IDS(*flag, reduce_id)) {
         if (clock64() - s > TIMEOUT) {
-          printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
+          UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
                  threadIdx.x, reduce_id, *flag);
           break;
         }
@@ -978,7 +980,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -1075,7 +1077,7 @@ userbuffers_fp16_sum_inplace_gpu_rr_rs_oop_stride_atomic_fp8(
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64()-s > TIMEOUT) {
-        printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n",
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d",
                 myrank, blockIdx.x, threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -1174,7 +1176,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -1273,7 +1275,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       clock_t s = clock64();
       while (CHECK_IDS(*flag, reduce_id)) {
         if (clock64() - s > TIMEOUT) {
-          printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
+          UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
                  threadIdx.x, reduce_id, *flag);
           break;
         }
@@ -1392,7 +1394,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -1489,7 +1491,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -2973,14 +2975,17 @@ template void reducescatter2_userbuff_strided_atomic_fp8<__nv_fp8_e4m3>(
     const int rowelements, const int colelements, const int strideelements,
     const int numchunks, void *counters, communicator* comm, cudaStream_t stream = 0);
 #endif
+
 template void reducescatter2_userbuff_strided_atomic_fp8<__nv_fp8_e4m3>(
     void *output, float *scale, const int handler, const int offset, const int rowelements,
     const int colelements, const int strideelements_out, const int strideelements_in,
     const int numchunks, void *counters, communicator *comm, cudaStream_t stream = 0);
+
 template void reducescatter2_userbuff_strided_multiatomic_fp8<__nv_fp8_e4m3>(
     void *output, float *scale, const int handler, const int offset, const int rowelements,
     const int colelements, const int strideelements_out, const int strideelements_in,
     const int numchunks, void *counters, communicator *comm, cudaStream_t stream = 0);
+
 __global__ void __launch_bounds__(MAX_THREADS)
     kuserbuffers_pullsendrecv(int myrank, int peer, int *recv_id, int *send_flagptr,
                               int *recv_flagptr, int4 *srcptr, int4 *dstptr, const int lines) {
@@ -3000,7 +3005,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("[%d from %d] pullrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
+        UB_PRINT("pullsendrecv [dst:%d src:%d] : expected %d, observed %d", myrank, peer, signal_id,
                *flag);
         break;
       }
@@ -3060,8 +3065,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("[%d from %d] pullrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
-               *flag);
+        UB_PRINT("pullrecv [dst:%d src:%d] : expected %d, observed %d", myrank, peer, signal_id, *flag);
         break;
       }
     }
@@ -3129,7 +3133,7 @@ __global__ void kuserbuffers_pushrecv(int myrank, int peer, int *recv_id, int *f
   clock_t s = clock64();
   while (CHECK_IDS(*flag, signal_id)) {
     if (clock64() - s > TIMEOUT) {
-      printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id, *flag);
+      UB_PRINT("pushrecv [dst:%d src:%d] : expected %d, observed %d", myrank, peer, signal_id, *flag);
       return;
     }
   }
@@ -3180,8 +3184,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
-               *flag);
+        UB_PRINT("pushsendrecv [dst:%d src:%d] : expected %d, observed %d", myrank, peer, signal_id, *flag);
         return;
       }
     }
@@ -3232,7 +3235,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
-        printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
+        UB_PRINT("pushsendrecv atomic [dst:%d src:%d] : expected %d, observed %d", myrank, peer, signal_id,
                *flag); /*return;*/
       }
     }
@@ -3299,8 +3302,8 @@ __global__ void __launch_bounds__(MAX_THREADS)
       clock_t s = clock64();
       while (CHECK_IDS(*flag, signal_id)) {
         if (clock64() - s > TIMEOUT) {
-          printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
-                 *flag); /*return;*/
+          UB_PRINT("pushsendrecv multiatomic [dst:%d src:%d] : expected %d, observed %d", myrank, peer, signal_id,
+                    *flag); /*return;*/
         }
       }
     }
