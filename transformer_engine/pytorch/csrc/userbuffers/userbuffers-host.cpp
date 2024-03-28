@@ -128,6 +128,9 @@ int create_communicator_grouped2(communicator **comm, int pipegpus, int pipenode
   for (int i = 0; i < userbuffers_op_types; i++)
     (*comm)->active_req[i].active = -1;
 
+  // Number of cycles to wait: ~100 sec
+  (*comm)->ub_timeout = getenv("UB_TIMEOUT") ? atoll(getenv("UB_TIMEOUT")) : 200000000000ull;
+
   int ret = 0;
   // split communicator
   char host_name[MPI_MAX_PROCESSOR_NAME];
@@ -571,6 +574,7 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
   return comm->free_region++;
 }
 
+#if 0
 int allreduce_userbuff_inplace_gpu(const int handler, const int offset, const int elements,
                                    const int blocksize, communicator *comm, cudaStream_t stream);
 
@@ -585,7 +589,9 @@ int reducescatter2_userbuff_inplace_gpu(const int maxcredit, const int handler, 
 int allgather2_userbuff_inplace_gpu(const int maxcredit, const int handler, const int offset,
                                     const int elements, const int blocksize, communicator *comm,
                                     cudaStream_t stream, int op);
+#endif
 
+#if 0
 void allreduce_nonsharp_inplace(const int handler, const int offset, const int elements,
                                 communicator *comm, cudaStream_t stream, int op) {
   if (elements < 64)
@@ -628,7 +634,9 @@ void allreduce_nonsharp_inplace(const int handler, const int offset, const int e
     comm->basecounter[op] += (elements * 2 + blocksize - 1) / blocksize;
   }
 }
+#endif
 
+#if 0
 void allreduce2_userbuff_inplace(const int handler, const int offset, const int elements,
                                  communicator *comm, cudaStream_t stream) {
   allreduce_nonsharp_inplace(handler, offset, elements, comm, stream,
@@ -643,7 +651,9 @@ void allreduce_userbuff_inplace(const int handler, const int offset, const int e
                              userbuffers_allreduceop_nonsharp);
   return;
 }
+#endif
 
+#if 0
 void reducescatter_userbuff_inplace(const int handler, const int offset, const int elements,
                                     communicator *comm, cudaStream_t stream) {
   if (elements < 64)
@@ -688,7 +698,9 @@ void reducescatter_userbuff_inplace(const int handler, const int offset, const i
     comm->basecounter[op] += (elements * 2 + blocksize - 1) / blocksize;
   }
 }
+#endif
 
+#if 0
 void allgather_userbuff_inplace(const int handler, const int offset, const int elements,
                                 communicator *comm, cudaStream_t stream) {
   if (elements < 64)
@@ -713,3 +725,4 @@ void allgather_userbuff_inplace(const int handler, const int offset, const int e
   int sms = allgather2_userbuff_inplace_gpu(maxcredit, handler, offset, elements, blocksize, comm,
                                             stream, op);
 }
+#endif
