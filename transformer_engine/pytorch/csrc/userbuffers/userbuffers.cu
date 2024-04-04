@@ -3112,8 +3112,7 @@ __global__ void kuserbuffers_pullsend(int myrank, int peer, int *send_id, int *f
 }
 
 __global__ void kuserbuffers_inc(int *id) {
-  const int signal_id = (*id) + 1;
-  *id = signal_id;
+  atomicAdd(id, 1);
 }
 
 __global__ void kuserbuffers_proxysend(int *id, int *hostflag) {
@@ -3199,7 +3198,10 @@ __global__ void __launch_bounds__(MAX_THREADS)
   }
 }
 
-__global__ void kuserbuffers_pushrecv(int myrank, int peer, int nvrank, int nvpeer, int *recv_id, int *flagptr, int adder, unsigned long long ub_timeout) {
+#define CHECK_CE(ce_start, ce_end) ((ce_start) != nullptr && (ce_end) !=nullptr && *(ce_start) != *(ce_end))
+
+__global__ void kuserbuffers_pushrecv(int myrank, int peer, int nvrank, int nvpeer, int *recv_id, int *flagptr, int adder,
+                                      unsigned long long ub_timeout, int *ce_start_ptr, int *ce_end_ptr) {
   const int signal_id = (*recv_id) + adder;
   *recv_id = signal_id;
   volatile int *flag = (volatile int *)flagptr;
@@ -3210,6 +3212,8 @@ __global__ void kuserbuffers_pushrecv(int myrank, int peer, int nvrank, int nvpe
     if (CHECK_TIMEOUT(s, ub_timeout)) {
       UB_PRINT("pushrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d] : expected %d, observed %d",
                 myrank, peer, nvrank, nvpeer, signal_id, *flag);
+      if (CHECK_CE(ce_start_ptr, ce_end_ptr))
+          UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
       return;
     }
   }
@@ -3219,7 +3223,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     kuserbuffers_pushsendrecv(int *send_id, int *send_flagptr, int4 *srcptr, int4 *dstptr,
                               const int lines, int myrank, int peer, int *recv_id,
                               int *recv_flagptr, int adder, unsigned long long ub_timeout,
-                              int nv_myrank, int nv_peer) {
+                              int nv_myrank, int nv_peer, int *ce_start_ptr, int *ce_end_ptr) {
   if (lines) {
     const int start_elem = threadIdx.x + blockDim.x * blockIdx.x;
     const int end_elem = lines;
@@ -3263,6 +3267,8 @@ __global__ void __launch_bounds__(MAX_THREADS)
       if (CHECK_TIMEOUT(s, ub_timeout)) {
         UB_PRINT("pushsendrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
                   myrank, peer, nv_myrank, nv_peer, signal_id, *flag);
+        if (CHECK_CE(ce_start_ptr, ce_end_ptr))
+            UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
         return;
       }
     }
@@ -3273,7 +3279,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     kuserbuffers_pushsendrecv_atomic(int *send_id, int *send_flagptr, int4 *srcptr, int4 *dstptr,
                                      const int lines, int myrank, int peer, int *recv_id,
                                      int *recv_flagptr, int adder, void *counters, unsigned long long ub_timeout,
-                                     int nv_myrank, int nv_peer) {
+                                     int nv_myrank, int nv_peer,  int *ce_start_ptr, int *ce_end_ptr) {
   if (lines) {
     const int start_elem = threadIdx.x + blockDim.x * blockIdx.x;
     const int end_elem = lines;
@@ -3316,6 +3322,8 @@ __global__ void __launch_bounds__(MAX_THREADS)
       if (CHECK_TIMEOUT(s, ub_timeout)) {
         UB_PRINT("pushsendrecv atomic [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
                   myrank, peer, nv_myrank, nv_peer, signal_id, *flag); /*return;*/
+        if (CHECK_CE(ce_start_ptr, ce_end_ptr))
+          UB_PRINT("pushsendrecv atomic: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
       }
     }
 
@@ -3333,7 +3341,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
                                           int *recv_id, int *recv_flagptr, int adder,
                                           void *counters, int nchunks, int send_stride,
                                           int recv_stride, bool shuffle, unsigned long long ub_timeout,
-                                          int nv_myrank, int nv_peer) {
+                                          int nv_myrank, int nv_peer, int *ce_start_ptr, int *ce_end_ptr) {
   for (int chunk_i = 0; chunk_i < nchunks - 1; chunk_i++) {
     int send_chunk_id = shuffle ? chunk_i : (nchunks + myrank - chunk_i) % nchunks;
     int recv_chunk_id = shuffle ? chunk_i + 1 : (nchunks + myrank - chunk_i - 1) % nchunks;
@@ -3384,6 +3392,9 @@ __global__ void __launch_bounds__(MAX_THREADS)
         if (CHECK_TIMEOUT(s, ub_timeout)) {
           UB_PRINT("pushsendrecv multiatomic [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
                     myrank, peer, nv_myrank, nv_peer, signal_id, *flag); /*return;*/
+          if (CHECK_CE(ce_start_ptr, ce_end_ptr))
+            UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
+          return;
         }
       }
     }
@@ -3419,16 +3430,32 @@ __global__ void __launch_bounds__(MAX_THREADS)
 
 #define INTRANODE(peer) ((peer / comm->nvsize) == (comm->myrank / comm->nvsize))
 
+// Index corresponds to the type of flag:
+// 0 - Send index counter
+// 1 - CE start index counter
+// 2 - CE end index counter
+#define GET_SEND_PTR_BY_INDEX(peerlocal, comm, dsth, index) \
+                             (((comm)->peer_ptr[0][(peerlocal)]) + ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + \
+                             (comm)->myrank * NVTE_MAX_REGIONS + (dsth) + (index) * NVTE_MAX_NVLINK * NVTE_MAX_REGIONS ) * sizeof(int)))
+
+// Index corresponds to the type of flag:
+// 0 - Receive index counter
+// 1 - CE start index counter
+// 2 - CE end index counter
+#define GET_RECV_PTR_BY_INDEX(recv_peer, comm, dsth, index) \
+                             (((comm)->mem_ptr[0]) + ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + \
+                             (recv_peer) * NVTE_MAX_REGIONS + (dsth) + (index) * NVTE_MAX_NVLINK * NVTE_MAX_REGIONS ) * sizeof(int)))
+
 void userbuffers_send(const int srchandler, const size_t srcoffset, const int dsthandler,
                       const size_t dstoffset, const size_t bytes, communicator *comm,
                       const int peer, cudaStream_t stream) {
-  int peerlocal = peer % comm->nvsize;
-  void *flagptr =
-      (comm->peer_ptr[0][peerlocal]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + comm->myrank * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
-  bool signalonly = (bytes / 16 == 0) || (comm->use_ce != 0);
-  bool intranode = INTRANODE(peer);
+  int peerlocal      = peer % comm->nvsize;
+  void *flagptr      = GET_SEND_PTR_BY_INDEX(peerlocal, comm, dsthandler, 0);
+  void *ce_start_ptr = GET_SEND_PTR_BY_INDEX(peerlocal, comm, dsthandler, 1);
+  void *ce_end_ptr   = GET_SEND_PTR_BY_INDEX(peerlocal, comm, dsthandler, 2);
+  bool signalonly    = (bytes / 16 == 0) || (comm->use_ce != 0);
+  bool intranode     = INTRANODE(peer);
+
   if (!intranode && (comm->launch_mode & NVTE_LAUNCH_CPU)) {
     comm->fifo[comm->head].optype = userbuffers_sendop;
     comm->fifo[comm->head].basecounter = comm->basecounter[userbuffers_sendop];
@@ -3459,8 +3486,11 @@ void userbuffers_send(const int srchandler, const size_t srcoffset, const int ds
     void *srcptr = (comm->mem_ptr[srchandler]) + srcoffset;
     void *dstptr = (comm->peer_ptr[dsthandler][peerlocal]) + dstoffset;
 
-    if (comm->use_ce)
+    if (comm->use_ce) {
+      kuserbuffers_inc<<<1, 1, 0, stream>>>((int *)ce_start_ptr);
       CUDACHECK(cudaMemcpyAsync(dstptr, srcptr, bytes, cudaMemcpyDeviceToDevice, stream));
+      kuserbuffers_inc<<<1, 1, 0, stream>>>((int *)ce_end_ptr);
+    }
     SETUP_LAUNCH_CONFIG(signalonly ? 1 : comm->sms, signalonly ? 1 : 1024, stream);
     int *arg1 = &comm->send_id[peer], *arg2 = reinterpret_cast<int *>(flagptr);
     int4 *arg3 = reinterpret_cast<int4 *>(srcptr), *arg4 = reinterpret_cast<int4 *>(dstptr);
@@ -3479,19 +3509,27 @@ void userbuffers_sendrecv(const int srchandler, const int dsthandler, const size
   bool signalonly = (bytes / 16 == 0) || (comm->use_ce != 0);
   int send_peerlocal = send_peer % comm->nvsize;
   int recv_peerlocal = recv_peer % comm->nvsize;
-  void *flagptr_send =
-      (comm->peer_ptr[0][send_peerlocal]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + comm->myrank * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
-  void *flagptr_recv =
-      (comm->mem_ptr[0]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + recv_peer * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
+  //void *flagptr_send =
+  //    (comm->peer_ptr[0][send_peerlocal]) +
+  //    ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + comm->myrank * NVTE_MAX_REGIONS + dsthandler) *
+  //     sizeof(int));
+  void *flagptr_send = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 0);
+  void *ce_start_ptr = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 1);
+  void *ce_end_ptr   = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 2);
+  //void *flagptr_recv =
+  //    (comm->mem_ptr[0]) +
+  //    ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + recv_peer * NVTE_MAX_REGIONS + dsthandler) *
+  //     sizeof(int));
+  void *flagptr_recv = GET_RECV_PTR_BY_INDEX(recv_peer, comm, dsthandler, 0);
 
   void *send_srcptr = (comm->mem_ptr[srchandler]) + send_offset;
   void *send_dstptr = (comm->peer_ptr[dsthandler][send_peerlocal]) + send_offset;
-  if (comm->use_ce)
+
+  if (comm->use_ce) {
+    kuserbuffers_inc<<<1, 1, 0, stream>>>((int *)ce_start_ptr);
     CUDACHECK(cudaMemcpyAsync(send_dstptr, send_srcptr, bytes, cudaMemcpyDeviceToDevice, stream));
+    kuserbuffers_inc<<<1, 1, 0, stream>>>((int *)ce_end_ptr);
+  }
   SETUP_LAUNCH_CONFIG(signalonly ? 1 : comm->sms, signalonly ? 1 : 1024, stream);
 
   int *arg1 = &comm->send_id[send_peer];
@@ -3507,13 +3545,16 @@ void userbuffers_sendrecv(const int srchandler, const int dsthandler, const size
   unsigned long long arg11 = comm->ub_timeout;
   int arg12 = send_peerlocal;
   int arg13 = recv_peerlocal;
+  int *arg14 = reinterpret_cast<int *>(comm->use_ce ? ce_start_ptr : nullptr);
+  int *arg15 = reinterpret_cast<int *>(comm->use_ce ? ce_end_ptr : nullptr);
   void *kernelArgs[] = {reinterpret_cast<void *>(&arg1), reinterpret_cast<void *>(&arg2),
                         reinterpret_cast<void *>(&arg3), reinterpret_cast<void *>(&arg4),
                         reinterpret_cast<void *>(&arg5), reinterpret_cast<void *>(&arg6),
                         reinterpret_cast<void *>(&arg7), reinterpret_cast<void *>(&arg8),
                         reinterpret_cast<void *>(&arg9), reinterpret_cast<void *>(&arg10),
                         reinterpret_cast<void *>(&arg11), reinterpret_cast<void *>(&arg12),
-                        reinterpret_cast<void *>(&arg13)};
+                        reinterpret_cast<void *>(&arg13), reinterpret_cast<void *>(&arg14),
+                        reinterpret_cast<void *>(&arg15)};
   CUDACHECK(
       cudaLaunchKernelExC(&cfg, reinterpret_cast<void *>(kuserbuffers_pushsendrecv), kernelArgs));
   //}
@@ -3528,19 +3569,25 @@ void userbuffers_sendrecv_atomic(const int srchandler, const int dsthandler,
 
   int send_peerlocal = send_peer % comm->nvsize;
   int recv_peerlocal = recv_peer % comm->nvsize;
-  void *flagptr_send =
-      (comm->peer_ptr[0][send_peerlocal]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + comm->myrank * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
-  void *flagptr_recv =
-      (comm->mem_ptr[0]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + recv_peer * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
+  //void *flagptr_send =
+  //    (comm->peer_ptr[0][send_peerlocal]) +
+  //    ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + comm->myrank * NVTE_MAX_REGIONS + dsthandler) *
+  //     sizeof(int));
+  //void *flagptr_recv =
+  //    (comm->mem_ptr[0]) +
+  //    ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + recv_peer * NVTE_MAX_REGIONS + dsthandler) *
+  //     sizeof(int));
+  void *flagptr_send = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 0);
+  void *ce_start_ptr = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 1);
+  void *ce_end_ptr   = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 2);
+  void *flagptr_recv = GET_RECV_PTR_BY_INDEX(recv_peer, comm, dsthandler, 0);
 
   void *send_srcptr = (comm->mem_ptr[srchandler]) + send_offset;
   void *send_dstptr = (comm->peer_ptr[dsthandler][send_peerlocal]) + send_offset;
   if (comm->use_ce) {
+    kuserbuffers_inc<<<1, 1, 0, stream>>>((int *)ce_start_ptr);
     CUDACHECK(cudaMemcpyAsync(send_dstptr, send_srcptr, bytes, cudaMemcpyDeviceToDevice, stream));
+    kuserbuffers_inc<<<1, 1, 0, stream>>>((int *)ce_end_ptr);
   }
   SETUP_LAUNCH_CONFIG(signalonly ? 1 : comm->sms, signalonly ? 1 : 1024, stream);
 
@@ -3558,13 +3605,16 @@ void userbuffers_sendrecv_atomic(const int srchandler, const int dsthandler,
   int arg12 = comm->ub_timeout;
   int arg13 = send_peerlocal;
   int arg14 = recv_peerlocal;
+  int *arg15 = reinterpret_cast<int *>(comm->use_ce ? ce_start_ptr : nullptr);
+  int *arg16 = reinterpret_cast<int *>(comm->use_ce ? ce_end_ptr : nullptr);
   void *kernelArgs[] = {reinterpret_cast<void *>(&arg1), reinterpret_cast<void *>(&arg2),
                         reinterpret_cast<void *>(&arg3), reinterpret_cast<void *>(&arg4),
                         reinterpret_cast<void *>(&arg5), reinterpret_cast<void *>(&arg6),
                         reinterpret_cast<void *>(&arg7), reinterpret_cast<void *>(&arg8),
                         reinterpret_cast<void *>(&arg9), reinterpret_cast<void *>(&arg10),
                         reinterpret_cast<void *>(&arg12), reinterpret_cast<void *>(&arg13),
-                        reinterpret_cast<void *>(&arg14)};
+                        reinterpret_cast<void *>(&arg14), reinterpret_cast<void *>(&arg15),
+                        reinterpret_cast<void *>(&arg16)};
   CUDACHECK(cudaLaunchKernelExC(&cfg, reinterpret_cast<void *>(kuserbuffers_pushsendrecv_atomic),
                                 kernelArgs));
 }
@@ -3578,14 +3628,19 @@ void userbuffers_sendrecv_multiatomic(const int srchandler, const int dsthandler
 
   int send_peerlocal = send_peer % comm->nvsize;
   int recv_peerlocal = recv_peer % comm->nvsize;
-  void *flagptr_send =
-      (comm->peer_ptr[0][send_peerlocal]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + comm->myrank * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
-  void *flagptr_recv =
-      (comm->mem_ptr[0]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + recv_peer * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
+  //void *flagptr_send =
+  //    (comm->peer_ptr[0][send_peerlocal]) +
+  //    ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + comm->myrank * NVTE_MAX_REGIONS + dsthandler) *
+  //     sizeof(int));
+  //void *flagptr_recv =
+  //    (comm->mem_ptr[0]) +
+  //    ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + recv_peer * NVTE_MAX_REGIONS + dsthandler) *
+  //     sizeof(int));
+
+  void *flagptr_send = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 0);
+  void *ce_start_ptr = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 1);
+  void *ce_end_ptr   = GET_SEND_PTR_BY_INDEX(send_peerlocal, comm, dsthandler, 2);
+  void *flagptr_recv = GET_RECV_PTR_BY_INDEX(recv_peer, comm, dsthandler, 0);
 
   SETUP_LAUNCH_CONFIG(comm->sms, 1024, stream);
 
@@ -3607,6 +3662,8 @@ void userbuffers_sendrecv_multiatomic(const int srchandler, const int dsthandler
   unsigned long long arg16 = comm->ub_timeout;
   int arg17 = send_peerlocal;
   int arg18 = recv_peerlocal;
+  int *arg19 = reinterpret_cast<int *>(comm->use_ce ? ce_start_ptr : nullptr);
+  int *arg20 = reinterpret_cast<int *>(comm->use_ce ? ce_end_ptr : nullptr);
   void *kernelArgs[] = {reinterpret_cast<void *>(&arg1),  reinterpret_cast<void *>(&arg2),
                         reinterpret_cast<void *>(&arg3),  reinterpret_cast<void *>(&arg4),
                         reinterpret_cast<void *>(&arg5),  reinterpret_cast<void *>(&arg6),
@@ -3615,7 +3672,8 @@ void userbuffers_sendrecv_multiatomic(const int srchandler, const int dsthandler
                         reinterpret_cast<void *>(&arg11), reinterpret_cast<void *>(&arg12),
                         reinterpret_cast<void *>(&arg13), reinterpret_cast<void *>(&arg14),
                         reinterpret_cast<void *>(&arg15), reinterpret_cast<void *>(&arg16),
-                        reinterpret_cast<void *>(&arg17), reinterpret_cast<void *>(&arg18)};
+                        reinterpret_cast<void *>(&arg17), reinterpret_cast<void *>(&arg18),
+                        reinterpret_cast<void *>(&arg19), reinterpret_cast<void *>(&arg20)};
   CUDACHECK(cudaLaunchKernelExC(
       &cfg, reinterpret_cast<void *>(kuserbuffers_pushsendrecv_multiatomic), kernelArgs));
 }
@@ -3691,11 +3749,13 @@ void userbuffers_alltoall_send(const int srchandler, const size_t srcoffset, con
 void userbuffers_recv(const int srchandler, const size_t srcoffset, const int dsthandler,
                       const size_t dstoffset, const size_t bytes, communicator *comm,
                       const int peer, cudaStream_t stream) {
-  int peerlocal = peer % comm->nvsize;
-  void *flagptr =
-      (comm->mem_ptr[0]) +
-      ((NVTE_REG0_OFFSET(comm) + NVTE_REG0_RECV + peer * NVTE_MAX_REGIONS + dsthandler) *
-       sizeof(int));
+  int peerlocal      = peer % comm->nvsize;
+  void *flagptr      = GET_RECV_PTR_BY_INDEX(peer, comm, dsthandler, 0);
+  //(comm->peer_ptr[0][peerlocal]) +
+  //((REG0_OFFSET(comm) + REG0_RECV + MAX_NVLINK * MAX_REGIONS +
+   // comm->myrank * MAX_REGIONS + dsthandler) * sizeof(int));
+  void *ce_start_ptr = GET_RECV_PTR_BY_INDEX(peer, comm,dsthandler, 1);
+  void *ce_end_ptr   = GET_RECV_PTR_BY_INDEX(peer, comm,dsthandler, 2);
   bool signalonly = (bytes / 16 == 0) || (comm->use_ce != 0);
   bool intranode = INTRANODE(peer);
   if (!(comm->launch_mode & NVTE_LAUNCH_GPU))
@@ -3718,7 +3778,9 @@ void userbuffers_recv(const int srchandler, const size_t srcoffset, const int ds
     kuserbuffers_pushrecv<<<1, 1, 0, stream>>>(
         comm->myrank, peer, comm->nvrank, peerlocal, &comm->recv_id[peer * NVTE_MAX_REGIONS + dsthandler],
         reinterpret_cast<int *>(flagptr), signalonly || !intranode ? 1 : comm->sms,
-        comm->ub_timeout);
+        comm->ub_timeout,
+        comm->use_ce ? reinterpret_cast<int *>(ce_start_ptr):nullptr,
+        comm->use_ce ? reinterpret_cast<int *>(ce_end_ptr):nullptr);
   }
 }
 
