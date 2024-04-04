@@ -48,6 +48,10 @@
     asm volatile("fence.sc.gpu;\n");                                                               \
   }
 
+// Return true if producer > consumer, otherwise false while preventing integer overflow
+// If we expect that producer will be 2B+ messages behind consumer
+#define CHECK_IDS(producer, consumer) (((unsigned)(producer) - (unsigned)(consumer)) & (~INT_MAX))
+
 template <int RANKS>
 __global__ void __launch_bounds__(MAX_THREADS)
     userbuffers_fp16_sum_inplace_gpu_rw(const int op, const int flagoffset, const int firstrank,
@@ -71,7 +75,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -125,7 +129,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&myptr[targetgpu];
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
         printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -159,7 +163,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -208,7 +212,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&myptr[targetgpu];
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
         printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -270,7 +274,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -345,7 +349,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -419,7 +423,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -487,7 +491,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&myptr[targetgpu];
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
         printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -522,7 +526,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -607,7 +611,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
@@ -737,7 +741,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&myptr[targetgpu];
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
         printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -797,7 +801,7 @@ __global__ void __launch_bounds__(MAX_THREADS) userbuffers_fp16_sum_inplace_gpu_
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
@@ -885,7 +889,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       volatile int *flag = (volatile int *)&(myptr[targetgpu]);
       userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
       clock_t s = clock64();
-      while (*flag < reduce_id) {
+      while (CHECK_IDS(*flag, reduce_id)) {
         if (clock64() - s > TIMEOUT) {
           printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
                  threadIdx.x, reduce_id, *flag);
@@ -972,7 +976,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
@@ -1069,7 +1073,7 @@ userbuffers_fp16_sum_inplace_gpu_rr_rs_oop_stride_atomic_fp8(
     volatile int* flag = (volatile int*)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4*>(commbuff[targetgpu+handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64()-s > TIMEOUT) {
         printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n",
                 myrank, blockIdx.x, threadIdx.x, reduce_id, *flag);
@@ -1168,7 +1172,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     volatile int *flag = (volatile int *)&(myptr[targetgpu]);
     userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
@@ -1267,7 +1271,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       volatile int *flag = (volatile int *)&(myptr[targetgpu]);
       userptr[threadIdx.x] = reinterpret_cast<int4 *>(commbuff[targetgpu + handleridx]);
       clock_t s = clock64();
-      while (*flag < reduce_id) {
+      while (CHECK_IDS(*flag, reduce_id)) {
         if (clock64() - s > TIMEOUT) {
           printf("[%d] NVONLY RSBAR:SM %d [%d]:expecting %d got %d\n", myrank, blockIdx.x,
                  threadIdx.x, reduce_id, *flag);
@@ -1386,7 +1390,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&myptr[targetgpu];
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
         printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -1483,7 +1487,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     flagptr[physgpu] = reduce_id;
     volatile int *flag = (volatile int *)&myptr[targetgpu];
     clock_t s = clock64();
-    while (*flag < reduce_id) {
+    while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
         printf("NVONLY AGBAR:SM %d [%d]:expecting %d got %d\n", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
@@ -1514,7 +1518,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       }
       volatile int *flag = (volatile int *)&((reinterpret_cast<int *>(
           commbuff[myrank + firstrank]))[flagoffset + threadIdx.x + firstrank]);
-      while (*flag < basecounter) {
+      while (CHECK_IDS(*flag, basecounter)) {
       }
     }
     __syncthreads();
@@ -1632,7 +1636,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
         const int end_aligned = start_elem + aligned_elem;
 
         if (mythreadIdx == 0) {
-          while (*flag < gathercounter) {
+          while (CHECK_IDS(*flag, gathercounter)) {
           }
           gathercounter++;
         }
@@ -1691,7 +1695,7 @@ __global__ void __launch_bounds__(MAX_THREADS) userbuffers_fp16_sum_inplace_gpu_
         flagptr[flagoffset + gpustep * myrank + firstrank] = basecounter;
       }
       volatile int *flag = &localflag[gpustep * threadIdx.x + firstrank];
-      while (*flag < basecounter) {
+      while (CHECK_IDS(*flag, basecounter)) {
       }
     }
     __syncthreads();
@@ -1861,7 +1865,7 @@ __global__ void __launch_bounds__(MAX_THREADS) userbuffers_fp16_sum_inplace_gpu_
           const int end_aligned = start_elem + aligned_elem;
 
           if (mythreadIdx == 0) {
-            while (*flag < gathercounter) {
+            while (CHECK_IDS(*flag, gathercounter)) {
             }
             gathercounter++;
           }
@@ -1905,7 +1909,7 @@ __global__ void __launch_bounds__(MAX_THREADS) userbuffers_fp16_sum_inplace_gpu_
         flagptr[flagoffset + gpustep * myrank + firstrank] = basecounter;
       }
       volatile int *flag = &localflag[gpustep * threadIdx.x + firstrank];
-      while (*flag < basecounter) {
+      while (CHECK_IDS(*flag, basecounter)) {
       }
     }
     __syncthreads();
@@ -2111,7 +2115,7 @@ __global__ void __launch_bounds__(MAX_THREADS) userbuffers_fp16_sum_inplace_gpu_
           const int end_aligned = start_elem + aligned_elem;
 
           if (mythreadIdx == 0) {
-            while (*flag < gathercounter) {
+            while (CHECK_IDS(*flag, gathercounter)) {
             }
             gathercounter++;
           }
@@ -2994,7 +2998,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     const int signal_id = (*recv_id) + 1;
     volatile int *flag = (volatile int *)recv_flagptr;
     clock_t s = clock64();
-    while (*flag < signal_id) {
+    while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("[%d from %d] pullrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
                *flag);
@@ -3054,7 +3058,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     const int signal_id = (*recv_id) + 1;
     volatile int *flag = (volatile int *)flagptr;
     clock_t s = clock64();
-    while (*flag < signal_id) {
+    while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("[%d from %d] pullrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
                *flag);
@@ -3123,7 +3127,7 @@ __global__ void kuserbuffers_pushrecv(int myrank, int peer, int *recv_id, int *f
   if (*flag >= signal_id)
     return;
   clock_t s = clock64();
-  while (atomicAdd_system(flagptr, 0) < signal_id) {
+  while (CHECK_IDS(*flag, signal_id)) {
     if (clock64() - s > TIMEOUT) {
       printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id, *flag);
       return;
@@ -3174,7 +3178,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     if (*flag >= signal_id)
       return;
     clock_t s = clock64();
-    while (*flag < signal_id) {
+    while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
                *flag);
@@ -3226,7 +3230,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     volatile int *flag = (volatile int *)recv_flagptr;
     // if(*flag>=signal_id) return;
     clock_t s = clock64();
-    while (*flag < signal_id) {
+    while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
         printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
                *flag); /*return;*/
@@ -3293,7 +3297,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       volatile int *flag = (volatile int *)recv_flagptr;
       // if(*flag>=signal_id) return;
       clock_t s = clock64();
-      while (*flag < signal_id) {
+      while (CHECK_IDS(*flag, signal_id)) {
         if (clock64() - s > TIMEOUT) {
           printf("%d from %d] pushrecv: expected %d, stuck with %d\n", myrank, peer, signal_id,
                  *flag); /*return;*/
