@@ -43,7 +43,8 @@
 #define NVTE_REG0_OFFSET(comm) ((2 * NVTE_MAX_REGIONS) * NVTE_MAX_NVLINK \
                                  + NVTE_REG0_SINGLENODE * 2 + NVTE_MAX_PEERS)
 #define NVTE_REG0_COMMBUFFER 0
-#define NVTE_REG0_FLAGS (NVTE_REG0_RECV + NVTE_MAX_PEERS * NVTE_MAX_REGIONS)
+// x3 for [flagptr, ce_start_ptr, ce_end_ptr]
+#define NVTE_REG0_FLAGS (NVTE_REG0_RECV + NVTE_MAX_PEERS * NVTE_MAX_REGIONS * 3)
 #define NVTE_REG0_IBRS 32
 #define NVTE_REG0_IBAG 512
 
