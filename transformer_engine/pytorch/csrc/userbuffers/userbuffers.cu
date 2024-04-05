@@ -3232,7 +3232,7 @@ __global__ void kuserbuffers_pushrecv(int myrank, int peer, int nvrank, int nvpe
       UB_PRINT("pushrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d] : expected %d, observed %d",
                 myrank, peer, nvrank, nvpeer, signal_id, *flag);
       if (CHECK_CE(ce_start_ptr, ce_end_ptr))
-          UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
+          UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
       return;
     }
   }
@@ -3287,7 +3287,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
         UB_PRINT("pushsendrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
                   myrank, peer, nv_myrank, nv_peer, signal_id, *flag);
         if (CHECK_CE(ce_start_ptr, ce_end_ptr))
-            UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
+            UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
         return;
       }
     }
@@ -3342,7 +3342,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
         UB_PRINT("pushsendrecv atomic [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
                   myrank, peer, nv_myrank, nv_peer, signal_id, *flag); /*return;*/
         if (CHECK_CE(ce_start_ptr, ce_end_ptr))
-          UB_PRINT("pushsendrecv atomic: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
+          UB_PRINT("pushsendrecv atomic: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
       }
     }
 
@@ -3360,7 +3360,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
                                           int *recv_id, int *recv_flagptr, int adder,
                                           void *counters, int nchunks, int send_stride,
                                           int recv_stride, bool shuffle, unsigned long long ub_timeout,
-                                          int nv_myrank, int nv_peer, int *ce_start_ptr, int *ce_end_ptr) {
+                                          int nv_myrank, int nv_peer) {
   for (int chunk_i = 0; chunk_i < nchunks - 1; chunk_i++) {
     int send_chunk_id = shuffle ? chunk_i : (nchunks + myrank - chunk_i) % nchunks;
     int recv_chunk_id = shuffle ? chunk_i + 1 : (nchunks + myrank - chunk_i - 1) % nchunks;
@@ -3411,8 +3411,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
         if (CHECK_TIMEOUT(s, ub_timeout)) {
           UB_PRINT("pushsendrecv multiatomic [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
                     myrank, peer, nv_myrank, nv_peer, signal_id, *flag); /*return;*/
-          if (CHECK_CE(ce_start_ptr, ce_end_ptr))
-            UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
+          // CE mode is not supported for multi-atomic, so there is no need to check for a deadlock
           return;
         }
       }
@@ -3556,7 +3555,7 @@ void userbuffers_sendrecv(const int srchandler, const int dsthandler, const size
   int4 *arg3 = reinterpret_cast<int4 *>(send_srcptr);
   int4 *arg4 = reinterpret_cast<int4 *>(send_dstptr);
   int arg5 = signalonly ? 0 : bytes / 16;
-  int arg6 = comm->myrank;
+  int arg6 = send_peer;
   int arg7 = recv_peer;
   int *arg8 = &comm->recv_id[recv_peer * NVTE_MAX_REGIONS + dsthandler];
   int *arg9 = reinterpret_cast<int *>(flagptr_recv);
@@ -3615,7 +3614,7 @@ void userbuffers_sendrecv_atomic(const int srchandler, const int dsthandler,
   int4 *arg3 = reinterpret_cast<int4 *>(send_srcptr);
   int4 *arg4 = reinterpret_cast<int4 *>(send_dstptr);
   int arg5 = signalonly ? 0 : bytes / 16;
-  int arg6 = comm->myrank;
+  int arg6 = send_peer;
   int arg7 = recv_peer;
   int *arg8 = &comm->recv_id[recv_peer * NVTE_MAX_REGIONS + dsthandler];
   int *arg9 = reinterpret_cast<int *>(flagptr_recv);
@@ -3644,6 +3643,7 @@ void userbuffers_sendrecv_multiatomic(const int srchandler, const int dsthandler
                                       const int recv_peer, const int nchunks, void *counters,
                                       bool shuffle, cudaStream_t stream) {
   assert(comm->push && comm->use_ce == 0);
+  // CE is not supported
 
   int send_peerlocal = send_peer % comm->nvsize;
   int recv_peerlocal = recv_peer % comm->nvsize;
@@ -3681,8 +3681,6 @@ void userbuffers_sendrecv_multiatomic(const int srchandler, const int dsthandler
   unsigned long long arg16 = comm->ub_timeout;
   int arg17 = send_peerlocal;
   int arg18 = recv_peerlocal;
-  int *arg19 = reinterpret_cast<int *>(comm->use_ce ? ce_start_ptr : nullptr);
-  int *arg20 = reinterpret_cast<int *>(comm->use_ce ? ce_end_ptr : nullptr);
   void *kernelArgs[] = {reinterpret_cast<void *>(&arg1),  reinterpret_cast<void *>(&arg2),
                         reinterpret_cast<void *>(&arg3),  reinterpret_cast<void *>(&arg4),
                         reinterpret_cast<void *>(&arg5),  reinterpret_cast<void *>(&arg6),
@@ -3691,10 +3689,9 @@ void userbuffers_sendrecv_multiatomic(const int srchandler, const int dsthandler
                         reinterpret_cast<void *>(&arg11), reinterpret_cast<void *>(&arg12),
                         reinterpret_cast<void *>(&arg13), reinterpret_cast<void *>(&arg14),
                         reinterpret_cast<void *>(&arg15), reinterpret_cast<void *>(&arg16),
-                        reinterpret_cast<void *>(&arg17), reinterpret_cast<void *>(&arg18),
-                        reinterpret_cast<void *>(&arg19), reinterpret_cast<void *>(&arg20)};
+                        reinterpret_cast<void *>(&arg17), reinterpret_cast<void *>(&arg18)};
   CUDACHECK(cudaLaunchKernelExC(
-      &cfg, reinterpret_cast<void *>(kuserbuffers_pushsendrecv_multiatomic), kernelArgs));
+    &cfg, reinterpret_cast<void *>(kuserbuffers_pushsendrecv_multiatomic), kernelArgs));
 }
 
 #if 0
