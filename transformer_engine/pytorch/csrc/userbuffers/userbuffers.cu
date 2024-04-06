@@ -3630,9 +3630,9 @@ void userbuffers_sendrecv_atomic(const int srchandler, const int dsthandler,
                         reinterpret_cast<void *>(&arg5), reinterpret_cast<void *>(&arg6),
                         reinterpret_cast<void *>(&arg7), reinterpret_cast<void *>(&arg8),
                         reinterpret_cast<void *>(&arg9), reinterpret_cast<void *>(&arg10),
-                        reinterpret_cast<void *>(&arg12), reinterpret_cast<void *>(&arg13),
-                        reinterpret_cast<void *>(&arg14), reinterpret_cast<void *>(&arg15),
-                        reinterpret_cast<void *>(&arg16)};
+                        reinterpret_cast<void *>(&arg11), reinterpret_cast<void *>(&arg12),
+                        reinterpret_cast<void *>(&arg13), reinterpret_cast<void *>(&arg14),
+                        reinterpret_cast<void *>(&arg15), reinterpret_cast<void *>(&arg16)};
   CUDACHECK(cudaLaunchKernelExC(&cfg, reinterpret_cast<void *>(kuserbuffers_pushsendrecv_atomic),
                                 kernelArgs));
 }
