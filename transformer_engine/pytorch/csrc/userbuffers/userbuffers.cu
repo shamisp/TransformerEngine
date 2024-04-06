@@ -3221,9 +3221,9 @@ __global__ void kuserbuffers_pushrecv(int myrank, int peer, int nvrank, int nvpe
 
 __global__ void __launch_bounds__(MAX_THREADS)
     kuserbuffers_pushsendrecv(int *send_id, int *send_flagptr, int4 *srcptr, int4 *dstptr,
-                              const int lines, int myrank, int peer, int *recv_id,
+                              const int lines, int send_peer, int recv_peer, int *recv_id,
                               int *recv_flagptr, int adder, unsigned long long ub_timeout,
-                              int nv_myrank, int nv_peer, int *ce_start_ptr, int *ce_end_ptr) {
+                              int nv_send, int nv_recv, int *ce_start_ptr, int *ce_end_ptr) {
   if (lines) {
     const int start_elem = threadIdx.x + blockDim.x * blockIdx.x;
     const int end_elem = lines;
@@ -3265,8 +3265,8 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("pushsendrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
-                  myrank, peer, nv_myrank, nv_peer, signal_id, *flag);
+        UB_PRINT("pushsendrecv [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expected %d, observed %d",
+                  send_peer, recv_peer, nv_send, nv_recv, signal_id, *flag);
         if (CHECK_CE(ce_start_ptr, ce_end_ptr))
             UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
         return;
@@ -3277,9 +3277,9 @@ __global__ void __launch_bounds__(MAX_THREADS)
 
 __global__ void __launch_bounds__(MAX_THREADS)
     kuserbuffers_pushsendrecv_atomic(int *send_id, int *send_flagptr, int4 *srcptr, int4 *dstptr,
-                                     const int lines, int myrank, int peer, int *recv_id,
+                                     const int lines, int send_peer, int recv_peer, int *recv_id,
                                      int *recv_flagptr, int adder, void *counters, unsigned long long ub_timeout,
-                                     int nv_myrank, int nv_peer,  int *ce_start_ptr, int *ce_end_ptr) {
+                                     int nv_send, int nv_recv,  int *ce_start_ptr, int *ce_end_ptr) {
   if (lines) {
     const int start_elem = threadIdx.x + blockDim.x * blockIdx.x;
     const int end_elem = lines;
@@ -3320,8 +3320,8 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("pushsendrecv atomic [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
-                  myrank, peer, nv_myrank, nv_peer, signal_id, *flag); /*return;*/
+        UB_PRINT("pushsendrecv atomic [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expected %d, observed %d",
+                  send_peer, recv_peer, nv_send, nv_recv, signal_id, *flag); /*return;*/
         if (CHECK_CE(ce_start_ptr, ce_end_ptr))
           UB_PRINT("pushsendrecv atomic: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
       }
@@ -3337,14 +3337,14 @@ __global__ void __launch_bounds__(MAX_THREADS)
 
 __global__ void __launch_bounds__(MAX_THREADS)
     kuserbuffers_pushsendrecv_multiatomic(int *send_id, int *send_flagptr, int4 *srcptr,
-                                          int4 *dstptr, const int lines, int myrank, int peer,
+                                          int4 *dstptr, const int lines, int send_peer, int recv_peer,
                                           int *recv_id, int *recv_flagptr, int adder,
                                           void *counters, int nchunks, int send_stride,
                                           int recv_stride, bool shuffle, unsigned long long ub_timeout,
-                                          int nv_myrank, int nv_peer) {
+                                          int nv_send, int nv_recv) {
   for (int chunk_i = 0; chunk_i < nchunks - 1; chunk_i++) {
-    int send_chunk_id = shuffle ? chunk_i : (nchunks + myrank - chunk_i) % nchunks;
-    int recv_chunk_id = shuffle ? chunk_i + 1 : (nchunks + myrank - chunk_i - 1) % nchunks;
+    int send_chunk_id = shuffle ? chunk_i : (nchunks + send_peer - chunk_i) % nchunks;
+    int recv_chunk_id = shuffle ? chunk_i + 1 : (nchunks + send_peer - chunk_i - 1) % nchunks;
     int send_offset = (send_chunk_id * send_stride) / 16;
     int recv_offset = ((shuffle ? recv_chunk_id : send_chunk_id) * recv_stride) / 16;
 
@@ -3390,8 +3390,8 @@ __global__ void __launch_bounds__(MAX_THREADS)
       clock_t s = clock64();
       while (CHECK_IDS(*flag, signal_id)) {
         if (CHECK_TIMEOUT(s, ub_timeout)) {
-          UB_PRINT("pushsendrecv multiatomic [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
-                    myrank, peer, nv_myrank, nv_peer, signal_id, *flag); /*return;*/
+          UB_PRINT("pushsendrecv multiatomic [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expected %d, observed %d",
+                    send_peer, recv_peer, nv_send, nv_recv, signal_id, *flag); /*return;*/
           // CE mode is not supported for multi-atomic, so there is no need to check for a deadlock
           return;
         }
