@@ -52,6 +52,8 @@ void ub_free(void *ptr) { free(ptr); }
 typedef char *ExtComm;
 #endif
 
+#define MNNVL
+
 #define NVTE_MAX_REGIONS 16
 #define NVTE_MAX_SMS 32
 #define NVTE_MAX_OPS 32

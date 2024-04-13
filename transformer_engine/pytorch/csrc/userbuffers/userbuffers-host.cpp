@@ -201,7 +201,11 @@ int create_communicator_grouped2(
     CUmulticastObjectProp mcProp = {};
     mcProp.numDevices = (*comm)->ar2_nvsize;
     mcProp.size = (*comm)->mc_maxsize;
+#ifdef MNNVL
+    mcProp.handleTypes = CU_MEM_HANDLE_TYPE_FABRIC;
+#else
     mcProp.handleTypes = CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+#endif
 
     NVTE_CALL_CHECK_CUDA_DRIVER(
         cuMulticastGetGranularity, &gran, &mcProp,
@@ -210,6 +214,17 @@ int create_communicator_grouped2(
     mcProp.size = mc_maxsize;
     (*comm)->mc_maxsize = mc_maxsize;
 
+#ifdef MNNVL
+    CUmemFabricHandle *exphndl = (CUmemFabricHandle *)malloc(sizeof(CUmemFabricHandle));
+    if ((*comm)->ar2_nvrank == 0) {
+      CUCHECK(cuMemExportToShareableHandle(static_cast<void *>(exphndl), (*comm)->mc_handle, CU_MEM_HANDLE_TYPE_FABRIC, 0));
+    }
+    MPI_Bcast(exphndl, sizeof(CUmemFabricHandle), MPI_BYTE, 0, (*comm)->comm_intra);
+    if ((*comm)->ar2_nvrank != 0) {
+      CUCHECK(cuMemImportFromShareableHandle(&(*comm)->mc_handle, reinterpret_cast<void *>(exphndl), CU_MEM_HANDLE_TYPE_FABRIC));
+    }
+    free(exphndl);
+#else
     // Broadcast the a POSIX file descriptor from the local root rank to other local ranks.
     // NOTE: This cannot be done via MPI_Bcast or other external comm libraries. They mangle the
     //       file descriptor and prevent cuMemImportFromShareableHandle() from correctly
@@ -248,6 +263,7 @@ int create_communicator_grouped2(
     close(fd);
     NVTE_CALL_CHECK_CUDA_DRIVER(cuMulticastAddDevice, (*comm)->mc_handle,
                                 (CUdeviceptr)(*comm)->mydev);
+#endif
 
     CUdeviceptr mc_va;
     NVTE_CALL_CHECK_CUDA_DRIVER(cuMemAddressReserve, &mc_va, mc_maxsize, (size_t)0, (CUdeviceptr)0U,
@@ -490,26 +506,38 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
     prop.location.id = comm->mydev;
     comm->uchandles[hndl] = reinterpret_cast<CUmemGenericAllocationHandle *>(
         malloc(nranks * sizeof(CUmemGenericAllocationHandle)));
-    NVTE_CALL_CHECK_CUDA_DRIVER(cuMemCreate, &(comm->uchandles[hndl][myrank]), aligned_size, &prop,
-                                (uint64_t)0);
+    NVTE_CALL_CHECK_CUDA_DRIVER(cuMemCreate, &(comm->uchandles[hndl][myrank]), aligned_size, &prop, 0);
 
-    int *peerfd = reinterpret_cast<int *>(malloc(nranks * sizeof(int)));
+#ifdef MNNVL
+    CUmemFabricHandle *exphndl = (CUmemFabricHandle *)malloc(nranks * sizeof(CUmemFabricHandle));
     NVTE_CALL_CHECK_CUDA_DRIVER(
-        cuMemExportToShareableHandle, reinterpret_cast<void *>(&peerfd[myrank]),
-        comm->uchandles[hndl][myrank],
-        static_cast<CUmemAllocationHandleType>(CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR),
-        (uint64_t)0);
-
-    volatile uint32_t abortFlag = 0;
+        cuMemExportToShareableHandle, static_cast<void *>(&exphndl[myrank]), 
+        comm->uchandles[hndl][myrank], CU_MEM_HANDLE_TYPE_FABRIC, 0);
+    MPI_Allgather(&exphndl[myrank], sizeof(CUmemFabricHandle), MPI_BYTE, exphndl,
+                  sizeof(CUmemFabricHandle), MPI_BYTE, comm->comm_intra);
+    for (int p = 0; p < nranks; p++)
+      if (p != myrank)
+        NVTE_CALL_CHECK_CUDA_DRIVER(
+            cuMemImportFromShareableHandle, &comm->uchandles[hndl][p],
+            reinterpret_cast<void *>(&exphndl[p]), CU_MEM_HANDLE_TYPE_FABRIC);
+    free(exphndl);
+#else
+    int *peerfd                  = reinterpret_cast<int *>(malloc(nranks * sizeof(int)));
+    volatile uint32_t abortFlag  = 0;
     struct ncclIpcSocket ipcSock = {0};
-    uint64_t opId = 0xdeadcafebeef;
-    ncclResult_t ret = ncclSuccess;
+    uint64_t opId                = 0xdeadcafebeef;
+    ncclResult_t ret             = ncclSuccess;
 
     // All-gather POSIX file descriptors across local ranks.
     // NOTE: This cannot be done via MPI_Allgather or other external comm libraries. They mangle
     //       the file descriptor and prevent cuMemImportFromShareableHandle() from correctly
     //       interpreting the file. Instead, we use system socket to send/recv the file handle
     //       without mangling.
+
+    NVTE_CALL_CHECK_CUDA_DRIVER(
+        cuMemExportToShareableHandle(&peerfd[myrank], comm->uchandles[hndl][myrank],
+        CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR, 0 /*flags*/));
+
     NCCLCHECK(ncclIpcSocketInit(&ipcSock, myrank, (uint64_t)opId, &abortFlag));
     for (int p = 1; p < nranks; p++) {
       comm->_barrier(comm->comm_intra);
@@ -519,7 +547,7 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
       NCCLCHECKGOTO(ncclIpcSocketRecvFd(&ipcSock, &peerfd[(myrank + nranks - p) % nranks]), ret,
                     error);
     }
-  error:
+error:
     NCCLCHECK(ncclIpcSocketClose(&ipcSock));
 
     for (int p = 0; p < nranks; p++) {
@@ -530,6 +558,8 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
             static_cast<CUmemAllocationHandleType>(CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR));
       close(peerfd[p]);
     }
+    free(peerfd);
+#endif
     CUdeviceptr ptr;
     NVTE_CALL_CHECK_CUDA_DRIVER(cuMemAddressReserve, &ptr, (size_t)(aligned_size * nranks),
                                 (size_t)0, (CUdeviceptr)0, (uint64_t)0);
@@ -559,7 +589,6 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
         cudaMemcpy((reinterpret_cast<char *>(comm->gpu_ptrs)) + (hndl * nranks * sizeof(void *)),
                    remptrs, nranks * sizeof(void *), cudaMemcpyHostToDevice));
     free(remptrs);
-    free(peerfd);
     comm->memflags[hndl] = UB_MEM_UC_CONTIG | UB_MEM_ALLOCATED;
 
     if (comm->use_mc && comm->mc_maxsize >= comm->mc_offset + aligned_size) {
