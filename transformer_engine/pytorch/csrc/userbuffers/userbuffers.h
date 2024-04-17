@@ -14,6 +14,7 @@
 #include <chrono>
 #include <functional>
 #include <stdexcept>
+#include "nvml.h"
 
 #ifdef UB_MPI_BOOTSTRAP
 #include <mpi.h>
@@ -94,6 +95,23 @@ typedef char *ExtComm;
 #define NVTE_HF_NVREDUCEDONE (userbuffers_op_types + 3)
 #define NVTE_MAX_SHARP 16
 
+// Strip the path from a full filename
+#define FILENAME(file) ({ \
+    const char* filename = file; \
+    const char* basename = filename; \
+    for (const char* ptr = filename; *ptr != '\0'; ptr++) { \
+        if (*ptr == '/' || *ptr == '\\') { \
+            basename = ptr + 1; \
+        } \
+    } \
+    basename; \
+})
+
+// Printf to provide enough information so it is easier to attribute failures
+#define UB_PRINT(message, ...) printf("[%s:%s:%d] " message "\n", FILENAME(__FILE__),              \
+                                                                  __FUNCTION__,                    \
+                                                                  __LINE__, __VA_ARGS__)
+
 typedef struct ub_request {
   int optype;
   int blocksize;
@@ -151,7 +169,7 @@ struct communicator {
       ar_nvrank;  // number of gpus(and first gpu in a group) of gpus per node in reduction subgroup
                   // (_splitar init used) would be equal to (nvsize,0) for regular comm_create
   int ar2_nvsize, ar2_firstgpu, ar2_nvrank;  // with ar_nvsize as a step
-  int pipe_id;  // which allreduce set of groups (pipeline rank in range of 0..pipeline_size)
+  // int pipe_id;  // which allreduce set of groups (pipeline rank in range of 0..pipeline_size)
   int sm_arch;
   int num_nodes, my_node,
       first_node;  // comm_inter communicator, per-rail allreduce (might have subset of nodes)
@@ -163,7 +181,7 @@ struct communicator {
 
   void *mem_mr[NVTE_MAX_REGIONS];
 
-  ub_request *fifo;
+  // ub_request *fifo;
   int nblocks, alignblock, minblock, asyncblocks, active_nreqs;
   ub_request active_req[userbuffers_op_types];  // NOLINT(*)
   int padding[7];
@@ -186,6 +204,7 @@ struct communicator {
   int *send_id, *recv_id;
   int mydev;
   uint64_t ub_timeout;
+  nvmlGpuFabricInfoV_t nvml_fabric_info;
 };
 typedef struct communicator communicator;
 
@@ -229,10 +248,10 @@ void destroy_communicator_mpi(communicator *comm);
     returned offset is offset of gpubuff relative to buffer registered
 */
 
-int pipe_rank(communicator *comm,
-              int step);  // helper function to help walk across allreduce1 x allreduce2 groups
-                          // data-parallel and tensor-parallel position within data and tensor
-                          // groups would be preserved
+//int pipe_rank(communicator *comm,
+//              int step);  // helper function to help walk across allreduce1 x allreduce2 groups
+//                          // data-parallel and tensor-parallel position within data and tensor
+//                          // groups would be preserved
 
 int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *comm, bool alloc);
 /*  returns handler and registers buffers. assumed to be collective i.e. you use same groups and
