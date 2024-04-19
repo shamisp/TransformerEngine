@@ -53,7 +53,7 @@ void ub_free(void *ptr) { free(ptr); }
 typedef char *ExtComm;
 #endif
 
-#define MNNVL
+#define MNNVL 1
 
 #define CE_DEADLOCK_DETECTOR 1 // Enable CE deadlock detection in production env
 
