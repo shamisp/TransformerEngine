@@ -53,7 +53,12 @@ void ub_free(void *ptr) { free(ptr); }
 typedef char *ExtComm;
 #endif
 
+// Check if the CUDA version is above 12.3
+#if CUDA_VERSION >= 12030
 #define MNNVL 1
+#else
+#define MNNVL 0
+#endif
 
 #define CE_DEADLOCK_DETECTOR 1 // Enable CE deadlock detection in production env
 
@@ -141,6 +146,7 @@ enum req_type {
 struct communicator {
   int myrank, nranks;  // global job communicator
   int nvrank, nvsize;  // single node comm_intra
+  int nvclique_index;  // clique index for MPI communicator
   int free_region;
 
   int launch_mode;
@@ -191,6 +197,7 @@ struct communicator {
   int padding2[15];
   volatile int tail;
 
+<<<<<<< HEAD
   // Abstract communication callbacks to support external bootstrapping (e.g. DL frameworks)
   std::function<void(void **, void *, size_t, ExtComm)> _alloc_copy_allgather;
   std::function<void(ExtComm)> _barrier;
@@ -203,6 +210,10 @@ struct communicator {
   MPI_Request mpihndl[NVTE_MAX_SHARP];
 #endif
 
+=======
+  MPI_Comm comm_inter,  // reduction group communicator (subset of the nodes) along GPU rail
+      comm_intra;       // full intranode (all ndev GPUS in the same NVLink domain)
+>>>>>>> ed282e1 (Improving the code and removing assumtions)
   int *send_id, *recv_id;
   int mydev;
   uint64_t ub_timeout;
