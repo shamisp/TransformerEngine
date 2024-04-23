@@ -39,13 +39,22 @@ static char EXT_COMM_INTER[] = "inter";
 
 int stringCmp(const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); }
 
-#define CUDACHECK(cmd)                                                                      \
-  do {                                                                                      \
-    cudaError_t e = cmd;                                                                    \
-    if (e != cudaSuccess) {                                                                 \
-      printf("Failed: Cuda error %s:%d '%s'\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
-      exit(EXIT_FAILURE);                                                                   \
-    }                                                                                       \
+#define MPICHECK(cmd, op)                                                                          \
+  do {                                                                                             \
+    int e = cmd;                                                                                   \
+    if (e != MPI_SUCCESS) {                                                                        \
+      UB_PRINT("MPI Operation failed %s [%d]", op, e);                                             \
+      exit(EXIT_FAILURE);                                                                          \
+    }                                                                                              \
+  } while (0)
+
+#define CUDACHECK(cmd)                                                                             \
+  do {                                                                                             \
+    cudaError_t e = cmd;                                                                           \
+    if (e != cudaSuccess) {                                                                        \
+      printf("Failed: Cuda error %s:%d '%s'\n", __FILE__, __LINE__, cudaGetErrorString(e));        \
+      exit(EXIT_FAILURE);                                                                          \
+    }                                                                                              \
   } while (0)
 
 #define NVTE_UB_ERROR(x)                                                            \
@@ -69,20 +78,6 @@ int stringCmp(const void *a, const void *b) { return strcmp((const char *)a, (co
       goto label;                                      \
     }                                                  \
   } while (0);
-
-//int pipe_rank(communicator *comm, int step) {
-//  int mynode = comm->myrank / comm->nvsize;
-//  int mylocal = comm->nvrank;
-//  int numlocal = comm->nvsize;
-//
-//  int newlocal1 = mylocal + step * comm->ar_nvsize * comm->ar2_nvsize;
-//  int newlocal = (numlocal + (newlocal1 % numlocal)) % numlocal;
-//  int newnode = mynode;
-//  newnode += (newlocal1 - newlocal) / numlocal * comm->num_nodes * comm->num2_nodes;
-//  int allnodes = comm->nranks / comm->nvsize;
-//  newnode = (allnodes + (newnode % allnodes)) % allnodes;
-//  return newnode * numlocal + newlocal;
-//}
 
 #define NVMLCHECK(cmd)                                                                             \
   do {                                                                                             \
@@ -128,9 +123,6 @@ static int mnnvl_init(communicator **comm) {
     return 1;
   }
 
-// add allreduce for state ?
-// if (fabric_info.state != NVML_GPU_FABRIC_STATE_COMPLETED) abort
-
   if (getenv("NVTE_UBDEBUG"))
     UB_PRINT("MNNVL nvmlGpuFabricInfoV_t fabric UUID %lx.%lx cliqueId 0x%x state %d healthMask 0x%x",
               ((long *)&fabric_info.clusterUuid)[0], ((long *)&fabric_info.clusterUuid)[1],
@@ -157,24 +149,19 @@ static int mnnvl_detect_domains(communicator **comm) {
       goto error;
     }
 
-    mpi_status = MPI_Allgather(&(*comm)->nvml_fabric_info.clusterUuid, NVML_GPU_FABRIC_UUID_LEN,
-                               MPI_CHAR, cluster_uuid, NVML_GPU_FABRIC_UUID_LEN, MPI_CHAR, MPI_COMM_WORLD);
-    if (mpi_status != MPI_SUCCESS) {
-      UB_PRINT("MPI_Allgather failed [%d]", mpi_status);
-      goto error;
-    }
+    MPICHECK(MPI_Allgather(&(*comm)->nvml_fabric_info.clusterUuid, NVML_GPU_FABRIC_UUID_LEN,
+                               MPI_CHAR, cluster_uuid, NVML_GPU_FABRIC_UUID_LEN, MPI_CHAR, MPI_COMM_WORLD),
+                               "MPI_Allgather");
 
     cluster_cliqueid = (unsigned int*)malloc((*comm)->nranks * sizeof(int) * NVML_GPU_FABRIC_UUID_LEN);
     if (cluster_cliqueid == NULL) {
       UB_PRINT("Failed to allocate memory for UUID [%p]", cluster_cliqueid);
       goto error;
     }
-    mpi_status = MPI_Allgather(&(*comm)->nvml_fabric_info.cliqueId, 1,
-                               MPI_UNSIGNED, cluster_cliqueid, 1, MPI_UNSIGNED, MPI_COMM_WORLD);
-    if (mpi_status != MPI_SUCCESS) {
-      UB_PRINT("MPI_Allgather failed [%d]", mpi_status);
-      goto error;
-    }
+
+    MPICHECK(MPI_Allgather(&(*comm)->nvml_fabric_info.cliqueId, 1,
+                               MPI_UNSIGNED, cluster_cliqueid, 1, MPI_UNSIGNED, MPI_COMM_WORLD),
+                                "MPI_Allgather");
 
     for (int n = 0; n < (*comm)->nranks; n++) {
       if (0 == strncmp((const char*)(*comm)->nvml_fabric_info.clusterUuid, (const char*)&cluster_uuid[n * NVML_GPU_FABRIC_UUID_LEN], NVML_GPU_FABRIC_UUID_LEN) &&
@@ -194,25 +181,13 @@ static int mnnvl_detect_domains(communicator **comm) {
     // User as a color for MPI communicatro split
     (*comm)->nvclique_index = clique_index;
     
-    mpi_status = MPI_Comm_split(MPI_COMM_WORLD, clique_index, (*comm)->myrank, &(*comm)->comm_intra);
-    if (mpi_status != MPI_SUCCESS) {
-      UB_PRINT("MPI_Comm_split failed [%d]", mpi_status);
-      goto error;
-    }
+    MPICHECK(MPI_Comm_split(MPI_COMM_WORLD, (*comm)->nvclique_index, (*comm)->myrank, &(*comm)->comm_intra),
+                     "MPI_Comm_split");
 
     int mylocal, numlocal;
 
-    MPI_Comm_rank((*comm)->comm_intra, &mylocal);
-    if (mpi_status != MPI_SUCCESS) {
-      UB_PRINT("MPI_Comm_rank failed [%d]", mpi_status);
-      goto error;
-    }
-
-    MPI_Comm_size((*comm)->comm_intra, &numlocal);
-    if (mpi_status != MPI_SUCCESS) {
-      UB_PRINT("MPI_Comm_size failed [%d]", mpi_status);
-      goto error;
-    }
+    MPICHECK(MPI_Comm_rank((*comm)->comm_intra, &mylocal), "MPI_Comm_rank");
+    MPICHECK(MPI_Comm_size((*comm)->comm_intra, &numlocal), "MPI_Comm_size");
 
     assert(mylocal  == myclique_rank);
     assert(numlocal == clique_size);
@@ -360,22 +335,23 @@ int create_communicator_grouped2(
   int allnodes = numranks / numlocal;
   int nodeid = myrank / numlocal;
   int datanodes = allnodes / pipenodes / tensornodes;
-  // Pasha - not used
-  int pipenodegroup_id = myrank / numlocal / (datanodes * tensornodes);
 
   //(*comm)->pipe_id = pipegpus * pipenodegroup_id + mylocal / (datagpus * tensorgpus);
 
   (*comm)->comm_inter = EXT_COMM_INTER;
 
   CUDACHECK(cudaFree(0));
+
+#if 0 // Keep the code for now because it can be re-used for multiple
+      // tensor dimensions in the same clique
   int datanodegroup_id =
       // global rank / num of ranks in nvlink domain / num of datanodes
       myrank / numlocal / datanodes;  // data reduction group node belongs, equals 0 for all if both
                                       // pipenodes=1 and tensornodes=1
   // mpi communicator only needed for SHARP which is always
   // allreduce1/data-parallel
-  MPI_Comm_split(MPI_COMM_WORLD, mylocal + numlocal * datanodegroup_id, rank, &(*comm)->comm_inter);
   // different rails from same group are in different subcommunicators
+  MPI_Comm_split(MPI_COMM_WORLD, mylocal + numlocal * datanodegroup_id, rank, &(*comm)->comm_inter);
 
   MPI_Comm_size((*comm)->comm_inter, &num_nodes);
 
@@ -390,6 +366,7 @@ int create_communicator_grouped2(
   (*comm)->alignblock = 1024 * 512;
   (*comm)->minblock = 1024 * 2 * 1024;
   (*comm)->asyncblocks = 16;
+#endif
 
 #define NBUF 2
   if ((*comm)->sm_arch >= 9 && (*comm)->ar2_nvsize > 1 &&
@@ -419,23 +396,18 @@ int create_communicator_grouped2(
       CUCHECK(cuMulticastCreate(&(*comm)->mc_handle, &mcProp));
     }
 
-    printf("%d/%d:(%d x %d): DP %d x %d TP %d x %d, DPGROUP %dx%d TPGROUP "
-           "%dx%d\n",
-           myrank, nranks, myrank / numlocal, myrank % numlocal, (*comm)->my_node,
-           (*comm)->ar_nvrank, (*comm)->my2_node, (*comm)->ar2_nvrank, (*comm)->num_nodes,
-           (*comm)->ar_nvsize, (*comm)->num2_nodes, (*comm)->ar2_nvsize);
-
     CUmemFabricHandle *exphndl = (CUmemFabricHandle *)malloc(sizeof(CUmemFabricHandle));
+    if (exphndl == NULL) {
+      UB_PRINT("Memory allocation failed %p\n", exphndl);
+      exit(1);
+    }
     if ((*comm)->ar2_nvrank == 0) {
-    //if ((*comm)->myrank == 0) {
       CUCHECK(cuMemExportToShareableHandle(static_cast<void *>(exphndl), (*comm)->mc_handle, CU_MEM_HANDLE_TYPE_FABRIC, 0));
     }
-    // Pasha: add inter communicatoea
-    MPI_Bcast(exphndl, sizeof(CUmemFabricHandle), MPI_BYTE, 0, (*comm)->comm_intra);
-    //MPI_Bcast(exphndl, sizeof(CUmemFabricHandle), MPI_BYTE, 0, MPI_COMM_WORLD);
-    //MPI_Bcast(exphndl, sizeof(CUmemFabricHandle), MPI_BYTE, 0, (*comm)->comm_inter);
+
+    MPICHECK(MPI_Bcast(exphndl, sizeof(CUmemFabricHandle), MPI_BYTE, 0, (*comm)->comm_intra), "MPI_Bcast");
+
     if ((*comm)->ar2_nvrank != 0) {
-    //if ((*comm)->myrank != 0) {
       CUCHECK(cuMemImportFromShareableHandle(&(*comm)->mc_handle, reinterpret_cast<void *>(exphndl), CU_MEM_HANDLE_TYPE_FABRIC));
     }
     free(exphndl);
@@ -686,6 +658,8 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
   comm->memflags[hndl] = 0;
   comm->mem_dealloc[hndl] = alloc;
 
+  int mpi_status = MPI_SUCCESS;
+
 //  printf("Alloc register_user_buffer_collective %d\n", alloc);
 
   if (alloc) {
@@ -727,11 +701,11 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
 #ifdef MNNVL
     CUmemFabricHandle *exphndl = (CUmemFabricHandle *)malloc(nranks * sizeof(CUmemFabricHandle));
     CUmemFabricHandle myhndl;
-    NVTE_CALL_CHECK_CUDA_DRIVER(
-        cuMemExportToShareableHandle, &myhndl,
-        comm->uchandles[hndl][myrank], CU_MEM_HANDLE_TYPE_FABRIC, 0);
-    MPI_Allgather(&myhndl, sizeof(CUmemFabricHandle), MPI_BYTE, exphndl,
-                  sizeof(CUmemFabricHandle), MPI_BYTE, comm->comm_intra);
+    NVTE_CALL_CHECK_CUDA_DRIVER(cuMemExportToShareableHandle, 
+        &myhndl, comm->uchandles[hndl][myrank], CU_MEM_HANDLE_TYPE_FABRIC, 0);
+    MPICHECK(MPI_Allgather(&myhndl, sizeof(CUmemFabricHandle), MPI_BYTE, exphndl,
+                           sizeof(CUmemFabricHandle), MPI_BYTE, comm->comm_intra),
+                           "MPI_Allgather");
     for (int p = 0; p < nranks; p++)
       if (p != myrank)
         NVTE_CALL_CHECK_CUDA_DRIVER(
