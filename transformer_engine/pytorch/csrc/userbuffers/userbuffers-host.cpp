@@ -260,9 +260,10 @@ int create_communicator_grouped2(
 
 #if MNNVL
   if (mnnvl_init(comm))
-    return 1;
+    exit(EXIT_FAILURE);
+
   if (mnnvl_detect_domains(comm, tensorgpus))
-    return 1;
+    exit(EXIT_FAILURE);
 
   mylocal  = (*comm)->nvrank;
   numlocal = (*comm)->nvsize;
