@@ -1856,7 +1856,7 @@ void reducescatter2_userbuff_inplace(const int handler, const int offset, const 
     callranks_rsMC(32)
 #endif
   } else {
-    callranks_rs(2) 
+    callranks_rs(2)
     callranks_rs(4)
     callranks_rs(8)
 #ifdef MNNVL
@@ -1972,7 +1972,12 @@ do {                                                                  \
   kuserbuffers_inc<<<1, 1, 0, stream>>>(reinterpret_cast<int *>(id)); \
 } while (0)
 #else
-#define LAUNCH_CE_CHECK_INC(stream, id)
+#define LAUNCH_CE_CHECK_INC(stream, id)               \
+  do {                                                \
+    /* Telling compiler to ignore unused variables */ \
+    (void)stream;                                     \
+    (void)id;                                         \
+  } while (0)
 #endif
 
 __global__ void kuserbuffers_dummy(void) {}
