@@ -149,7 +149,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("Allreduce Gather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allreduce Gather: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -184,7 +184,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("Allreduce reduce-scatter:SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allreduce reduce-scatter:SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -233,7 +233,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, 2ull * ub_timeout)) {
-        UB_PRINT("Allreduce gather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allreduce gather: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -295,7 +295,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -371,7 +371,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -445,7 +445,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -513,7 +513,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -548,7 +548,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        UB_PRINT("Reduce-scatter: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Reduce-scatter: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -633,7 +633,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > TIMEOUT) {
-        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]: expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -763,7 +763,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64() - s > 2ull * TIMEOUT) {
-        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -825,7 +825,7 @@ __global__ void __launch_bounds__(MAX_THREADS) userbuffers_fp16_sum_inplace_gpu_
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]: expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -914,7 +914,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       clock_t s = clock64();
       while (CHECK_IDS(*flag, reduce_id)) {
         if (CHECK_TIMEOUT(s, ub_timeout)) {
-          UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
+          UB_PRINT("[%d] Reduce-scatter: SM %d [%d]: expecting %d got %d", myrank, blockIdx.x,
                  threadIdx.x, reduce_id, *flag);
           break;
         }
@@ -1002,7 +1002,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]: expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -1099,7 +1099,7 @@ userbuffers_fp16_sum_inplace_gpu_rr_rs_oop_stride_atomic_fp8(
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (clock64()-s > TIMEOUT) {
-        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d",
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]: expecting %d got %d",
                 myrank, blockIdx.x, threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -1198,7 +1198,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
+        UB_PRINT("[%d] Reduce-scatter: SM %d [%d]: expecting %d got %d", myrank, blockIdx.x,
                threadIdx.x, reduce_id, *flag);
         break;
       }
@@ -1297,7 +1297,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       clock_t s = clock64();
       while (CHECK_IDS(*flag, reduce_id)) {
         if (CHECK_TIMEOUT(s, ub_timeout)) {
-          UB_PRINT("[%d] Reduce-scatter: SM %d [%d]:expecting %d got %d", myrank, blockIdx.x,
+          UB_PRINT("[%d] Reduce-scatter: SM %d [%d]: expecting %d got %d", myrank, blockIdx.x,
                  threadIdx.x, reduce_id, *flag);
           break;
         }
@@ -1416,7 +1416,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, 2ull * ub_timeout)) {
-        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -1513,7 +1513,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, reduce_id)) {
       if (CHECK_TIMEOUT(s, 2ull * ub_timeout)) {
-        UB_PRINT("Allgather: SM %d [%d]:expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
+        UB_PRINT("Allgather: SM %d [%d]: expecting %d got %d", blockIdx.x, threadIdx.x, reduce_id,
                *flag);
         break;
       }
@@ -3078,7 +3078,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (clock64() - s > TIMEOUT) {
-        UB_PRINT("pullsendrecv [dst:%d src:%d] : expected %d, observed %d", myrank, peer, signal_id,
+        UB_PRINT("pullsendrecv [dst:%d src:%d]: expecting %d, observed %d", myrank, peer, signal_id,
                *flag);
         break;
       }
@@ -3138,7 +3138,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("pullrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expected %d, observed %d",
+        UB_PRINT("pullrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expecting %d, observed %d",
                   myrank, peer, nvrank, nvpeer, signal_id, *flag);
         break;
       }
@@ -3210,7 +3210,7 @@ __global__ void kuserbuffers_pushrecv(int myrank, int peer, int nvrank, int nvpe
   clock_t s = clock64();
   while (CHECK_IDS(*flag, signal_id)) {
     if (CHECK_TIMEOUT(s, ub_timeout)) {
-      UB_PRINT("pushrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d] : expected %d, observed %d",
+      UB_PRINT("pushrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d] : expecting %d, observed %d",
                 myrank, peer, nvrank, nvpeer, signal_id, *flag);
       if (CHECK_CE(ce_start_ptr, ce_end_ptr))
           UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
@@ -3265,7 +3265,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("pushsendrecv [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expected %d, observed %d",
+        UB_PRINT("pushsendrecv [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expecting %d, observed %d",
                   send_peer, recv_peer, nv_send, nv_recv, signal_id, *flag);
         if (CHECK_CE(ce_start_ptr, ce_end_ptr))
             UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
@@ -3320,7 +3320,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
     clock_t s = clock64();
     while (CHECK_IDS(*flag, signal_id)) {
       if (CHECK_TIMEOUT(s, ub_timeout)) {
-        UB_PRINT("pushsendrecv atomic [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expected %d, observed %d",
+        UB_PRINT("pushsendrecv atomic [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expecting %d, observed %d",
                   send_peer, recv_peer, nv_send, nv_recv, signal_id, *flag); /*return;*/
         if (CHECK_CE(ce_start_ptr, ce_end_ptr))
           UB_PRINT("pushsendrecv atomic: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
@@ -3390,7 +3390,7 @@ __global__ void __launch_bounds__(MAX_THREADS)
       clock_t s = clock64();
       while (CHECK_IDS(*flag, signal_id)) {
         if (CHECK_TIMEOUT(s, ub_timeout)) {
-          UB_PRINT("pushsendrecv multiatomic [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expected %d, observed %d",
+          UB_PRINT("pushsendrecv multiatomic [sending peer:%d receiving peer:%d][nvrank(GPU) sending peer: %d receiving peer: %d]: expecting %d, observed %d",
                     send_peer, recv_peer, nv_send, nv_recv, signal_id, *flag); /*return;*/
           // CE mode is not supported for multi-atomic, so there is no need to check for a deadlock
           return;
