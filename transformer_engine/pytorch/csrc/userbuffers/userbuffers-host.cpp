@@ -416,7 +416,7 @@ int create_communicator_grouped2(
       exit(1);
     }
     if ((*comm)->ar2_nvrank == 0) {
-      CUCHECK(cuMemExportToShareableHandle(&exphndl, (*comm)->mc_handle,
+      CUCHECK(cuMemExportToShareableHandle(static_cast<void *>(exphndl), (*comm)->mc_handle,
                                             CU_MEM_HANDLE_TYPE_FABRIC, 0));
     }
 
