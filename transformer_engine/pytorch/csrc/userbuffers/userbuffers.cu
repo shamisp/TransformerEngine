@@ -3229,7 +3229,7 @@ __global__ void kuserbuffers_pushrecv(int myrank, int peer, int nvrank, int nvpe
   clock_t s = clock64();
   while (CHECK_IDS(*flag, signal_id)) {
     if (CHECK_TIMEOUT(s, ub_timeout)) {
-      UB_PRINT("pushrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d] : expecting %d, observed %d",
+      UB_PRINT("pushrecv [grank dst:%d global src:%d][nvrank(GPU) dst: %d src: %d]: expecting %d, observed %d",
                 myrank, peer, nvrank, nvpeer, signal_id, *flag);
       if (CHECK_CE(ce_start_ptr, ce_end_ptr))
           UB_PRINT("pushrecv: CE deadlock DETECTED: %d (ce_start) != %d (ce_end)\n", *ce_start_ptr, *ce_end_ptr);
