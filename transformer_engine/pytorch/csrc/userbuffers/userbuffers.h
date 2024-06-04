@@ -60,8 +60,6 @@ typedef char *ExtComm;
 #define MNNVL 0
 #endif
 
-#define NVTE_CE_DEADLOCK_DETECTOR 1  // Enable CE deadlock detection in production env
-
 #define NVTE_MAX_REGIONS 16
 #define NVTE_MAX_SMS 32
 #define NVTE_MAX_OPS 32
@@ -213,6 +211,7 @@ struct communicator {
   int mydev;
   uint64_t ub_timeout;
   nvmlGpuFabricInfoV_t nvml_fabric_info;
+  int ce_deadlock_check;
 };
 typedef struct communicator communicator;
 
