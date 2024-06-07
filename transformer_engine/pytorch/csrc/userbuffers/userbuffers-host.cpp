@@ -307,6 +307,13 @@ int create_communicator_grouped2(
   MPI_Comm_size(MPI_COMM_WORLD, &numlocal);
   (*comm)->nvrank = mylocal;
   (*comm)->nvsize = numlocal;
+
+  if (getenv("NVTE_UBDEBUG"))
+      printf("%d/%d:(%d x %d): DP %d x %d TP %d x %d, DPGROUP %dx%d TPGROUP "
+              "%dx%d\n",
+              myrank, nranks, myrank / numlocal, myrank % numlocal, (*comm)->my_node,
+              (*comm)->ar_nvrank, (*comm)->my2_node, (*comm)->ar2_nvrank, (*comm)->num_nodes,
+              (*comm)->ar_nvsize, (*comm)->num2_nodes, (*comm)->ar2_nvsize);
 #endif
 
   cpu_set_t cpuset;
@@ -355,6 +362,7 @@ int create_communicator_grouped2(
   //(*comm)->pipe_id = pipegpus * pipenodegroup_id + mylocal / (datagpus * tensorgpus);
 
   (*comm)->comm_inter = EXT_COMM_INTER;
+  fflush(NULL);
 
   CUDACHECK(cudaFree(0));
 
@@ -694,7 +702,7 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
 
   int mpi_status = MPI_SUCCESS;
 
-//  printf("Alloc register_user_buffer_collective %d\n", alloc);
+  // printf("Alloc register_user_buffer_collective %d\n", alloc);
 
   if (alloc) {
     int nranks = comm->nvsize;  // total GPUs in NVLINK domain

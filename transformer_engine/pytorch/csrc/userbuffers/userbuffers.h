@@ -14,7 +14,6 @@
 #include <chrono>
 #include <functional>
 #include <stdexcept>
-#include "nvml.h"
 
 #ifdef UB_MPI_BOOTSTRAP
 #include <mpi.h>
@@ -53,8 +52,8 @@ void ub_free(void *ptr) { free(ptr); }
 typedef char *ExtComm;
 #endif
 
-// Check if the CUDA version is above 12.4
-#if CUDA_VERSION >= 12040
+#if defined(NVTE_WITH_MNNVL) && CUDA_VERSION >= 12040 && NVML_API_VERSION >= 12
+#include "nvml.h"
 #define MNNVL 1
 #else
 #define MNNVL 0
@@ -210,7 +209,9 @@ struct communicator {
   int *send_id, *recv_id;
   int mydev;
   uint64_t ub_timeout;
+#if MNNVL
   nvmlGpuFabricInfoV_t nvml_fabric_info;
+#endif
   int ce_deadlock_check;
 };
 typedef struct communicator communicator;
