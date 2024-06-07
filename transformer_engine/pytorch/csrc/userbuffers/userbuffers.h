@@ -52,7 +52,7 @@ void ub_free(void *ptr) { free(ptr); }
 typedef char *ExtComm;
 #endif
 
-#if defined(NVTE_WITH_MNNVL) && CUDA_VERSION >= 12040 && NVML_API_VERSION >= 12
+#if defined(NVTE_WITH_MNNVL) && CUDA_VERSION >= 12040
 #include "nvml.h"
 #define MNNVL 1
 #else
