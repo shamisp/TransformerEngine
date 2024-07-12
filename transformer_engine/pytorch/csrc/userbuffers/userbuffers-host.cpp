@@ -359,8 +359,6 @@ int create_communicator_grouped2(
   int nodeid = myrank / numlocal;
   int datanodes = allnodes / pipenodes / tensornodes;
 
-  //(*comm)->pipe_id = pipegpus * pipenodegroup_id + mylocal / (datagpus * tensorgpus);
-
   (*comm)->comm_inter = EXT_COMM_INTER;
   fflush(NULL);
 
@@ -434,8 +432,8 @@ int create_communicator_grouped2(
     }
     // local roots to export handles. We have numlocal/tensorgpus roots
     if ((*comm)->ar2_nvrank == 0) {
-      NVTE_CALL_CHECK_CUDA_DRIVER(cuMemExportToShareableHandle,static_cast<void *>(exphndl), (*comm)->mc_handle,
-                                            CU_MEM_HANDLE_TYPE_FABRIC, 0);
+      NVTE_CALL_CHECK_CUDA_DRIVER(cuMemExportToShareableHandle, static_cast<void *>(exphndl),
+                                  (*comm)->mc_handle, CU_MEM_HANDLE_TYPE_FABRIC, 0);
     }
     // Loop over all tensor groups to bcast the fabric handles.
     // Ranks that withing the same tensor group will keep the handle and other will discard it.
@@ -782,8 +780,8 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
     //       without mangling.
 
     NVTE_CALL_CHECK_CUDA_DRIVER(
-        cuMemExportToShareableHandle(&peerfd[myrank], comm->uchandles[hndl][myrank],
-        CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR, 0 /*flags*/));
+        cuMemExportToShareableHandle, &peerfd[myrank], comm->uchandles[hndl][myrank],
+        CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR, 0 /*flags*/);
 
     NCCLCHECK(ncclIpcSocketInit(&ipcSock, myrank, (uint64_t)opId, &abortFlag));
     for (int p = 1; p < nranks; p++) {
