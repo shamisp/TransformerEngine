@@ -303,8 +303,6 @@ int create_communicator_grouped2(
   // Figure out mylocal
   MPI_Comm_rank((*comm)->comm_intra, &mylocal);
   MPI_Comm_size((*comm)->comm_intra, &numlocal);
-  MPI_Comm_rank(MPI_COMM_WORLD, &mylocal);
-  MPI_Comm_size(MPI_COMM_WORLD, &numlocal);
   (*comm)->nvrank = mylocal;
   (*comm)->nvsize = numlocal;
 
@@ -851,7 +849,7 @@ error:
     CUDACHECK(cudaIpcGetMemHandle(&myhndl, *gpubuff));
 
     MPI_Allgather(&myhndl, sizeof(cudaIpcMemHandle_t), MPI_BYTE, memhndl,
-                  sizeof(cudaIpcMemHandle_t), MPI_BYTE, MPI_COMM_WORLD);
+                  sizeof(cudaIpcMemHandle_t), MPI_BYTE, comm->comm_intra);
 
     for (int i = 0; i < comm->nvsize; i++)
       if (i != comm->nvrank) {
