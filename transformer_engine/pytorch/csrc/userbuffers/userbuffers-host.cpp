@@ -158,7 +158,7 @@ static int mnnvl_detect_domains(communicator **comm, int tensorgpus) {
 
     MPICHECK(MPI_Allgather(&(*comm)->nvml_fabric_info.clusterUuid, NVML_GPU_FABRIC_UUID_LEN,
                                MPI_CHAR, cluster_uuid, NVML_GPU_FABRIC_UUID_LEN,
-                               MPI_CHAR, MPI_COMM_WORLD));
+                               MPI_CHAR, (*comm)->comm_world));
 
     cluster_cliqueid = (unsigned int*)malloc((*comm)->nranks * sizeof(int) *
                                               NVML_GPU_FABRIC_UUID_LEN);
@@ -168,7 +168,7 @@ static int mnnvl_detect_domains(communicator **comm, int tensorgpus) {
     }
 
     MPICHECK(MPI_Allgather(&(*comm)->nvml_fabric_info.cliqueId, 1,
-                               MPI_UNSIGNED, cluster_cliqueid, 1, MPI_UNSIGNED, MPI_COMM_WORLD));
+                               MPI_UNSIGNED, cluster_cliqueid, 1, MPI_UNSIGNED, (*comm)->comm_world));
 
     for (int n = 0; n < (*comm)->nranks; n++) {
       if (0 == strncmp((const char*)(*comm)->nvml_fabric_info.clusterUuid,
@@ -193,7 +193,7 @@ static int mnnvl_detect_domains(communicator **comm, int tensorgpus) {
     // means that we have to split the clique to 4 communicators
     (*comm)->nvclique_index = clique_index + (myclique_rank/tensorgpus);
 
-    MPICHECK(MPI_Comm_split(MPI_COMM_WORLD, (*comm)->nvclique_index,
+    MPICHECK(MPI_Comm_split((*comm)->comm_world, (*comm)->nvclique_index,
              (*comm)->myrank, &(*comm)->comm_intra));
 
     int mylocal, numlocal;
