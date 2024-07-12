@@ -158,7 +158,7 @@ static int mnnvl_detect_domains(communicator **comm, int tensorgpus) {
 
     MPICHECK(MPI_Allgather(&(*comm)->nvml_fabric_info.clusterUuid, NVML_GPU_FABRIC_UUID_LEN,
                                MPI_CHAR, cluster_uuid, NVML_GPU_FABRIC_UUID_LEN,
-                               MPI_CHAR, (*comm)->comm_world));
+                               MPI_CHAR, EXT_COMM_WORLD));
 
     cluster_cliqueid = (unsigned int*)malloc((*comm)->nranks * sizeof(int) *
                                               NVML_GPU_FABRIC_UUID_LEN);
@@ -168,7 +168,7 @@ static int mnnvl_detect_domains(communicator **comm, int tensorgpus) {
     }
 
     MPICHECK(MPI_Allgather(&(*comm)->nvml_fabric_info.cliqueId, 1,
-                               MPI_UNSIGNED, cluster_cliqueid, 1, MPI_UNSIGNED, (*comm)->comm_world));
+                               MPI_UNSIGNED, cluster_cliqueid, 1, MPI_UNSIGNED, EXT_COMM_WORLD));
 
     for (int n = 0; n < (*comm)->nranks; n++) {
       if (0 == strncmp((const char*)(*comm)->nvml_fabric_info.clusterUuid,
@@ -193,7 +193,7 @@ static int mnnvl_detect_domains(communicator **comm, int tensorgpus) {
     // means that we have to split the clique to 4 communicators
     (*comm)->nvclique_index = clique_index + (myclique_rank/tensorgpus);
 
-    MPICHECK(MPI_Comm_split((*comm)->comm_world, (*comm)->nvclique_index,
+    MPICHECK(MPI_Comm_split(EXT_COMM_WORLD, (*comm)->nvclique_index,
              (*comm)->myrank, &(*comm)->comm_intra));
 
     int mylocal, numlocal;
@@ -268,6 +268,7 @@ int create_communicator_grouped2(
   int namelen, bytes, color, my_node, mylocal, numlocal, num_nodes;
   int rank = (*comm)->myrank, size = (*comm)->nranks;
 
+#if 0
 #if MNNVL
   if (mnnvl_init(comm))
     exit(EXIT_FAILURE);
@@ -312,6 +313,7 @@ int create_communicator_grouped2(
               myrank, nranks, myrank / numlocal, myrank % numlocal, (*comm)->my_node,
               (*comm)->ar_nvrank, (*comm)->my2_node, (*comm)->ar2_nvrank, (*comm)->num_nodes,
               (*comm)->ar_nvsize, (*comm)->num2_nodes, (*comm)->ar2_nvsize);
+#endif
 #endif
 
   cpu_set_t cpuset;
@@ -586,6 +588,16 @@ int create_communicator_grouped2_mpi(communicator **comm, int pipegpus, int pipe
   MPI_Comm_rank(EXT_COMM_WORLD, &myrank);
   MPI_Comm_size(EXT_COMM_WORLD, &numranks);
 
+#if MNNVL
+  if (mnnvl_init(comm))
+    exit(EXIT_FAILURE);
+
+  if (mnnvl_detect_domains(comm, tensorgpus))
+    exit(EXIT_FAILURE);
+
+  mylocal  = (*comm)->nvrank;
+  numlocal = (*comm)->nvsize;
+#else
   // find intranode numbers and make internode communicator
   char host_name[MPI_MAX_PROCESSOR_NAME];
   char(*host_names)[MPI_MAX_PROCESSOR_NAME];
@@ -610,6 +622,10 @@ int create_communicator_grouped2_mpi(communicator **comm, int pipegpus, int pipe
   MPI_Comm_split(EXT_COMM_WORLD, color, rank, &EXT_COMM_INTRA);
   MPI_Comm_rank(EXT_COMM_INTRA, &mylocal);
   MPI_Comm_size(EXT_COMM_INTRA, &numlocal);
+
+  (*comm)->nvrank = mylocal;
+  (*comm)->nvsize = numlocal;
+#endif
 
   // find internode numbers and make internode communicator
   CUDACHECK(cudaFree(0));
