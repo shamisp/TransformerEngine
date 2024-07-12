@@ -97,9 +97,9 @@ static int mnnvl_init(communicator **comm) {
   int flag = 0;
   CUdevice current_gpu;
   CUDACHECK(cudaGetDevice(&gpu_device));
-  CUCHECK(cuDeviceGet(&current_gpu, gpu_device));
-  CUCHECK(cuDeviceGetAttribute(&flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED,
-                                current_gpu));
+  NVTE_CALL_CHECK_CUDA_DRIVER(cuDeviceGet, &current_gpu, gpu_device);
+  NVTE_CALL_CHECK_CUDA_DRIVER(cuDeviceGetAttribute, &flag, CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED,
+                                current_gpu);
   if (!flag) {
     UB_PRINT("CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_FABRIC_SUPPORTED is not detected [%d]\n", flag);
     return 0;
@@ -415,7 +415,7 @@ int create_communicator_grouped2(
 
 #if MNNVL
     if ((*comm)->myrank == 0) {
-      CUCHECK(cuMulticastCreate(&(*comm)->mc_handle, &mcProp));
+      NVTE_CALL_CHECK_CUDA_DRIVER(cuMulticastCreate, &(*comm)->mc_handle, &mcProp);
     }
 
     // Allocate temporary handle since out of N bcast calls we will need to keep only the
@@ -432,8 +432,8 @@ int create_communicator_grouped2(
     }
     // local roots to export handles. We have numlocal/tensorgpus roots
     if ((*comm)->ar2_nvrank == 0) {
-      CUCHECK(cuMemExportToShareableHandle(static_cast<void *>(exphndl), (*comm)->mc_handle,
-                                            CU_MEM_HANDLE_TYPE_FABRIC, 0));
+      NVTE_CALL_CHECK_CUDA_DRIVER(cuMemExportToShareableHandle,static_cast<void *>(exphndl), (*comm)->mc_handle,
+                                            CU_MEM_HANDLE_TYPE_FABRIC, 0);
     }
     // Loop over all tensor groups to bcast the fabric handles.
     // Ranks that withing the same tensor group will keep the handle and other will discard it.
@@ -444,9 +444,9 @@ int create_communicator_grouped2(
     }
     // Non root ranks will import the fabric handle.
     if ((*comm)->ar2_nvrank != 0) {
-      CUCHECK(cuMemImportFromShareableHandle(&(*comm)->mc_handle,
+      NVTE_CALL_CHECK_CUDA_DRIVER(cuMemImportFromShareableHandle, &(*comm)->mc_handle,
                                               reinterpret_cast<void *>(exphndl),
-                                              CU_MEM_HANDLE_TYPE_FABRIC));
+                                              CU_MEM_HANDLE_TYPE_FABRIC);
     }
 
     free(tmp);
