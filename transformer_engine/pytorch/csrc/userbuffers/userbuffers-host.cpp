@@ -39,18 +39,6 @@ static char EXT_COMM_INTER[] = "inter";
 
 int stringCmp(const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); }
 
-#define MPICHECK(cmd)                                                                              \
-  do {                                                                                             \
-    int e = cmd;                                                                                   \
-    if (e != MPI_SUCCESS) {                                                                        \
-      char error_string[MPI_MAX_ERROR_STRING];                                                     \
-      int error_length;                                                                            \
-      MPI_Error_string(e, error_string, &error_length);                                            \
-      UB_PRINT("MPI Operation failed: %s  [%d]", error_string, e);                                 \
-      exit(EXIT_FAILURE);                                                                          \
-    }                                                                                              \
-  } while (0)
-
 #define CUDACHECK(cmd)                                                                             \
   do {                                                                                             \
     cudaError_t e = cmd;                                                                           \
@@ -92,6 +80,18 @@ int stringCmp(const void *a, const void *b) { return strcmp((const char *)a, (co
   } while (0)
 
 #if MNNVL
+#define MPICHECK(cmd)                                                                              \
+  do {                                                                                             \
+    int e = cmd;                                                                                   \
+    if (e != MPI_SUCCESS) {                                                                        \
+      char error_string[MPI_MAX_ERROR_STRING];                                                     \
+      int error_length;                                                                            \
+      MPI_Error_string(e, error_string, &error_length);                                            \
+      UB_PRINT("MPI Operation failed: %s  [%d]", error_string, e);                                 \
+      exit(EXIT_FAILURE);                                                                          \
+    }                                                                                              \
+  } while (0)
+
 static int mnnvl_init(communicator **comm) {
   int gpu_device;
   int flag = 0;
@@ -144,7 +144,6 @@ static int mnnvl_detect_domains(communicator **comm, int tensorgpus) {
     int ret = 1;
     unsigned char *cluster_uuid = NULL;
     unsigned int *cluster_cliqueid = NULL;
-    int mpi_status;
     int clique_size   = 0;
     int myclique_rank = 0;
     int clique_index  = 0;
@@ -264,9 +263,6 @@ int create_communicator_grouped2(
   // CE deadlock detection is disabled by default since it may introduce 1-2% overhead
   (*comm)->ce_deadlock_check = !!(getenv("NVTE_CE_DEADLOCK_CHECK"));
 
-  int ret = 0;
-  int namelen, bytes, color, my_node, mylocal, numlocal, num_nodes;
-  int rank = (*comm)->myrank, size = (*comm)->nranks;
 
 #if 0
 #if MNNVL
@@ -279,6 +275,8 @@ int create_communicator_grouped2(
   mylocal  = (*comm)->nvrank;
   numlocal = (*comm)->nvsize;
 #else
+  int ret = 0;
+  int namelen, bytes, color, my_node, mylocal, numlocal, num_nodes;
   // split communicator
   char host_name[MPI_MAX_PROCESSOR_NAME];
   char(*host_names)[MPI_MAX_PROCESSOR_NAME];
@@ -712,10 +710,6 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
   comm->memflags[hndl] = 0;
   comm->mem_dealloc[hndl] = alloc;
 
-  int mpi_status = MPI_SUCCESS;
-
-  // printf("Alloc register_user_buffer_collective %d\n", alloc);
-
   if (alloc) {
     int nranks = comm->nvsize;  // total GPUs in NVLINK domain
     int myrank = comm->nvrank;
@@ -756,7 +750,7 @@ int register_user_buffer_collective(void **gpubuff, size_t bytes, communicator *
     CUmemFabricHandle *exphndl = reinterpret_cast<CUmemFabricHandle *>
                                 malloc(nranks * sizeof(CUmemFabricHandle));
     CUmemFabricHandle myhndl;
-    NVTE_CALL_CHECK_CUDA_DRIVER(cuMemExportToShareableHandle, 
+    NVTE_CALL_CHECK_CUDA_DRIVER(cuMemExportToShareableHandle,
         &myhndl, comm->uchandles[hndl][myrank], CU_MEM_HANDLE_TYPE_FABRIC, 0);
     MPICHECK(MPI_Allgather(&myhndl, sizeof(CUmemFabricHandle), MPI_BYTE, exphndl,
                            sizeof(CUmemFabricHandle), MPI_BYTE, comm->comm_intra));
