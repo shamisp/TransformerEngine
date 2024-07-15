@@ -80,6 +80,7 @@ target_link_libraries(transformer_engine PUBLIC
                       CUDA::cudart
                       CUDA::nvrtc
                       CUDA::nvToolsExt
+                      nvidia-ml
                       CUDNN::cudnn)
 target_include_directories(transformer_engine PRIVATE
                            ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
